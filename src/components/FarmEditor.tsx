@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { GoogleMap, LoadScript, Marker, Polygon, StandaloneSearchBox } from '@react-google-maps/api'
+import { GoogleMap, Marker, Polygon, StandaloneSearchBox, useJsApiLoader } from '@react-google-maps/api'
 import { v4 as uuidv4 } from 'uuid'
 import { Farm } from '@/types/farm'
 import { getFarmById, upsertFarm } from '@/lib/storage'
@@ -21,8 +21,8 @@ export default function FarmEditor({ isNew }: Props) {
     return undefined
   }, [pathname])
 
-  const [apiKey, setApiKey] = useState<string | undefined>(undefined)
-  useEffect(() => { setApiKey(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) }, [])
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string | undefined
+  const { isLoaded } = useJsApiLoader({ id: 'ripen-google-maps', googleMapsApiKey: apiKey ?? '', libraries: ["places"] })
 
   const existing: Farm | undefined = isNew ? undefined : (idFromPath ? getFarmById(idFromPath) : undefined)
   const [name, setName] = useState(existing?.name ?? '')
@@ -119,38 +119,38 @@ export default function FarmEditor({ isNew }: Props) {
         <div className="lg:col-span-3">
           {!apiKey ? (
             <div className="h-[480px] rounded-xl border flex items-center justify-center bg-white">Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to see the map.</div>
+          ) : !isLoaded ? (
+            <div className="h-[480px] rounded-xl border flex items-center justify-center bg-white">Loading map…</div>
           ) : (
-            <LoadScript googleMapsApiKey={apiKey} libraries={["places"]}>
-              <div className="bg-white rounded-xl border p-3 space-y-3">
-                <StandaloneSearchBox onLoad={(ref) => { (searchRef as any).current = ref }} onPlacesChanged={onPlacesChanged}>
-                  <input className="w-full border rounded-md px-3 py-2" placeholder="Search location" />
-                </StandaloneSearchBox>
-                <GoogleMap mapContainerStyle={containerStyle} center={center} zoom={zoom} onZoomChanged={(...args) => {}} onCenterChanged={() => {}} onClick={onMapClick} onLoad={map => { setZoom(map.getZoom() ?? 12); setCenter(map.getCenter()?.toJSON() ?? center) }}>
-                  {path.length > 0 && (
-                    <Polygon 
-                      path={path} 
-                      options={polygonOptions} 
-                      editable 
-                      onLoad={(polygon) => {
-                        const pathObj = polygon.getPath()
-                        const sync = () => {
-                          const pts: google.maps.LatLngLiteral[] = []
-                          for (let i = 0; i < pathObj.getLength(); i++) {
-                            const p = pathObj.getAt(i)
-                            pts.push({ lat: p.lat(), lng: p.lng() })
-                          }
-                          setPath(pts)
+            <div className="bg-white rounded-xl border p-3 space-y-3">
+              <StandaloneSearchBox onLoad={(ref) => { (searchRef as any).current = ref }} onPlacesChanged={onPlacesChanged}>
+                <input className="w-full border rounded-md px-3 py-2" placeholder="Search location" />
+              </StandaloneSearchBox>
+              <GoogleMap mapContainerStyle={containerStyle} center={center} zoom={zoom} onZoomChanged={(...args) => {}} onCenterChanged={() => {}} onClick={onMapClick} onLoad={map => { setZoom(map.getZoom() ?? 12); setCenter(map.getCenter()?.toJSON() ?? center) }}>
+                {path.length > 0 && (
+                  <Polygon 
+                    path={path} 
+                    options={polygonOptions} 
+                    editable 
+                    onLoad={(polygon) => {
+                      const pathObj = polygon.getPath()
+                      const sync = () => {
+                        const pts: google.maps.LatLngLiteral[] = []
+                        for (let i = 0; i < pathObj.getLength(); i++) {
+                          const p = pathObj.getAt(i)
+                          pts.push({ lat: p.lat(), lng: p.lng() })
                         }
-                        pathObj.addListener('insert_at', sync)
-                        pathObj.addListener('remove_at', sync)
-                        pathObj.addListener('set_at', sync)
-                      }}
-                    />
-                  )}
-                  <Marker position={center} />
-                </GoogleMap>
-              </div>
-            </LoadScript>
+                        setPath(pts)
+                      }
+                      pathObj.addListener('insert_at', sync)
+                      pathObj.addListener('remove_at', sync)
+                      pathObj.addListener('set_at', sync)
+                    }}
+                  />
+                )}
+                <Marker position={center} />
+              </GoogleMap>
+            </div>
           )}
         </div>
       </div>

@@ -13,11 +13,13 @@ export type Farm = {
   id: string;
   name: string;
   country?: string;
+  locationLabel?: string; // human-readable address label
   crops?: string[];
   primaryCrop?: string;
   plantingDate?: string; // ISO date
   thumbnailUrl?: string;
   mapCenter?: { lat: number; lng: number; zoom?: number };
+  centroid?: { lat: number; lng: number } | null;
   polygon?: GeoJsonPolygon | null;
   createdAt: string; // ISO date
   updatedAt: string; // ISO date

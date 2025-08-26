@@ -35,7 +35,7 @@ export default function FarmsPage() {
             </div>
             <div className="p-4">
               <div className="font-medium">{f.name}</div>
-              <div className="text-xs text-gray-500">{f.country ?? 'Unknown country'}</div>
+              <div className="text-xs text-gray-500">{f.locationLabel ?? f.country ?? 'Unknown location'}</div>
             </div>
           </Link>
         ))}

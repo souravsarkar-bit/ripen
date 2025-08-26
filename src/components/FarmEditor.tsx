@@ -1,10 +1,10 @@
 "use client"
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GoogleMap, Marker, Polygon, StandaloneSearchBox, useJsApiLoader } from '@react-google-maps/api'
 import { v4 as uuidv4 } from 'uuid'
 import { Farm } from '@/types/farm'
 import { deleteFarm, getFarmById, upsertFarm } from '@/lib/storage'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 
 type Props = { isNew?: boolean }
 
@@ -12,7 +12,6 @@ const containerStyle = { width: '100%', height: '480px' }
 
 export default function FarmEditor({ isNew }: Props) {
   const router = useRouter()
-  const params = useSearchParams()
   const pathname = usePathname()
   const idFromPath = useMemo(() => {
     const parts = pathname.split('/')
@@ -39,7 +38,7 @@ export default function FarmEditor({ isNew }: Props) {
 
   const searchRef = useRef<google.maps.places.SearchBox | null>(null)
   const polygonRef = useRef<google.maps.Polygon | null>(null)
-  const geocodeTimer = useRef<NodeJS.Timeout | null>(null)
+  const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const onPlacesChanged = () => {
     const box = searchRef.current
@@ -105,7 +104,7 @@ export default function FarmEditor({ isNew }: Props) {
 
   const polygonOptions = { editable: true, draggable: false, fillColor: '#22c55e', fillOpacity: 0.3, strokeColor: '#16a34a', strokeWeight: 2 }
 
-  function centroidOf(points: {lat:number; lng:number}[]): {lat:number; lng:number} {
+  const centroidOf = useCallback((points: {lat:number; lng:number}[]): {lat:number; lng:number} => {
     if (!points.length) return { lat: center.lat, lng: center.lng }
     let area = 0, cx = 0, cy = 0
     for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
@@ -122,10 +121,10 @@ export default function FarmEditor({ isNew }: Props) {
       return { lat: s.lat / points.length, lng: s.lng / points.length }
     }
     return { lat: cy / (6 * area), lng: cx / (6 * area) }
-  }
+  }, [center.lat, center.lng])
 
-  function reverseGeocode(lat: number, lng: number) {
-    if (!isLoaded || !(window as any).google?.maps?.Geocoder) return
+  const reverseGeocode = useCallback((lat: number, lng: number) => {
+    if (!isLoaded || !(window as unknown as { google?: typeof google }).google?.maps?.Geocoder) return
     const geocoder = new google.maps.Geocoder()
     geocoder.geocode({ location: { lat, lng } }, (results, status) => {
       if (status === 'OK' && results && results[0]) {
@@ -134,7 +133,7 @@ export default function FarmEditor({ isNew }: Props) {
         if (countryComp?.long_name) setCountry(countryComp.long_name)
       }
     })
-  }
+  }, [isLoaded])
 
   // When polygon changes, geocode the centroid (debounced) to update country/location
   useEffect(() => {
@@ -142,7 +141,7 @@ export default function FarmEditor({ isNew }: Props) {
     const c = centroidOf(path)
     if (geocodeTimer.current) clearTimeout(geocodeTimer.current)
     geocodeTimer.current = setTimeout(() => reverseGeocode(c.lat, c.lng), 500)
-  }, [path, isLoaded])
+  }, [path, isLoaded, centroidOf, reverseGeocode])
 
   const onMapClick = (e: google.maps.MapMouseEvent) => {
     if (!e.latLng) return
@@ -157,7 +156,7 @@ export default function FarmEditor({ isNew }: Props) {
       setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude })
       setZoom(Math.max(14, zoom))
       // reverse geocode my location
-      if (isLoaded && (window as any).google?.maps?.Geocoder) {
+      if (isLoaded && (window as unknown as { google?: typeof google }).google?.maps?.Geocoder) {
         const geocoder = new google.maps.Geocoder()
         geocoder.geocode({ location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }, (results, status) => {
           if (status === 'OK' && results && results[0]) {
@@ -218,10 +217,10 @@ export default function FarmEditor({ isNew }: Props) {
             <div className="h-[480px] rounded-xl border flex items-center justify-center bg-white">Loading map…</div>
           ) : (
             <div className="bg-white rounded-xl border p-3 space-y-3 text-gray-900">
-              <StandaloneSearchBox onLoad={(ref) => { (searchRef as any).current = ref }} onPlacesChanged={onPlacesChanged}>
+              <StandaloneSearchBox onLoad={(ref) => { (searchRef as unknown as { current: google.maps.places.SearchBox | null }).current = ref }} onPlacesChanged={onPlacesChanged}>
                 <input className="w-full border rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-400 bg-white" placeholder="Search location" />
               </StandaloneSearchBox>
-              <GoogleMap mapContainerStyle={containerStyle} center={center} zoom={zoom} onZoomChanged={(...args) => {}} onCenterChanged={() => {}} onClick={onMapClick} onLoad={map => { setZoom(map.getZoom() ?? 12); setCenter(map.getCenter()?.toJSON() ?? center) }} options={{ mapTypeControl: true, streetViewControl: false, fullscreenControl: true }}>
+              <GoogleMap mapContainerStyle={containerStyle} center={center} zoom={zoom} onZoomChanged={() => {}} onCenterChanged={() => {}} onClick={onMapClick} onLoad={map => { setZoom(map.getZoom() ?? 12); setCenter(map.getCenter()?.toJSON() ?? center) }} options={{ mapTypeControl: true, streetViewControl: false, fullscreenControl: true }}>
                 {path.length > 0 && (
                   <Polygon 
                     path={path} 
